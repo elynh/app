@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bug Hunter — IBM AI Builders Challenge</title>
+
+  <!-- ============================================================
+       STYLES — CSS Custom Properties + Terminal/Cyberpunk Theme
+       ============================================================ -->
+  <style>
+    /* ---- Design Tokens ---- */
+    :root {
+      --clr-bg:         #0a0d0a;
+      --clr-surface:    #0f1a0f;
+      --clr-border:     #1f3f1f;
+      --clr-neon:       #39ff14;      /* neon green */
+      --clr-neon-dim:   #1aaa00;
+      --clr-accent:     #00e5ff;      /* cyan accent */
+      --clr-warn:       #ff6b35;      /* orange-red for danger */
+      --clr-muted:      #4d7a4d;
+      --clr-text:       #c8f0c8;      /* WCAG AA on --clr-bg */
+      --clr-server:     #ff6b35;
+      --font-mono:      "Courier New", Courier, monospace;
+      --transition:     0.15s ease;
+    }
+
+    /* ---- Reset ---- */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--clr-bg);
+      color: var(--clr-text);
+      font-family: var(--font-mono);
+      height: 100dvh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+    }
+
+    /* ---- Screen Utility ---- */
+    .screen {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: absolute;
+      inset: 0;
+      z-index: 10;
+      background: rgba(10,13,10,0.92);
+    }
+    .screen.active { display: flex; }
+
+    /* ---- Neon Heading ---- */
+    .neon-title {
+      font-size: clamp(2rem, 6vw, 4rem);
+      font-weight: 700;
+      color: var(--clr-neon);
+      text-shadow: 0 0 8px var(--clr-neon), 0 0 24px var(--clr-neon-dim);
+      letter-spacing: 0.1em;
+      margin-bottom: 0.5rem;
+    }
+    .neon-sub {
+      color: var(--clr-accent);
+      font-size: clamp(0.75rem, 2vw, 1rem);
+      text-shadow: 0 0 6px var(--clr-accent);
+      margin-bottom: 2rem;
+      text-align: center;
+      padding: 0 1rem;
+    }
+
+    /* ---- Buttons ---- */
+    .btn {
+      background: transparent;
+      color: var(--clr-neon);
+      border: 2px solid var(--clr-neon);
+      font-family: var(--font-mono);
+      font-size: clamp(0.85rem, 2vw, 1.1rem);
+      padding: 0.6em 2em;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      margin: 0.4rem;
+      transition: background var(--transition), color var(--transition), box-shadow var(--transition);
+    }
+    .btn:hover, .btn:focus-visible {
+      background: var(--clr-neon);
+      color: var(--clr-bg);
+      box-shadow: 0 0 16px var(--clr-neon);
+      outline: none;
+    }
+    .btn-warn {
+      color: var(--clr-warn);
+      border-color: var(--clr-warn);
+    }
+    .btn-warn:hover, .btn-warn:focus-visible {
+      background: var(--clr-warn);
+      color: var(--clr-bg);
+      box-shadow: 0 0 16px var(--clr-warn);
+    }
+
+    /* ---- Score Row ---- */
+    .score-row {
+      display: flex;
+      gap: 2rem;
+      font-size: clamp(0.7rem, 2vw, 0.95rem);
+      color: var(--clr-text);
+      margin-bottom: 0.4rem;
+    }
+    .score-row span { color: var(--clr-neon); font-weight: 700; }
+
+    /* ---- Lives ---- */
+    #lives-display { font-size: 1.4rem; letter-spacing: 0.2em; }
+
+    /* ---- HUD bar ---- */
+    #hud {
+      width: 100%;
+      max-width: 900px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 12px;
+      border-bottom: 1px solid var(--clr-border);
+      background: var(--clr-surface);
+      position: relative;
+      z-index: 2;
+      flex-shrink: 0;
+    }
+
+    /* ---- Game Canvas Area ---- */
+    #arena-wrapper {
+      position: relative;
+      width: 100%;
+      max-width: 900px;
+      flex: 1 1 auto;
+      overflow: hidden;
+      background: var(--clr-surface);
+      border-left: 1px solid var(--clr-border);
+      border-right: 1px solid var(--clr-border);
+    }
+
+    /* ---- Server Line ---- */
+    #server-line {
+      position: absolute;
+      bottom: 56px;
+      left: 0; right: 0;
+      height: 2px;
+      background: var(--clr-server);
+      box-shadow: 0 0 8px var(--clr-server);
+      z-index: 1;
+    }
+    #server-label {
+      position: absolute;
+      bottom: 60px;
+      right: 8px;
+      font-size: 0.65rem;
+      color: var(--clr-server);
+      text-shadow: 0 0 4px var(--clr-server);
+      letter-spacing: 0.1em;
+      z-index: 1;
+    }
+
+    /* ---- Input Bar ---- */
+    #input-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0; right: 0;
+      height: 52px;
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      background: #060d06;
+      border-top: 1px solid var(--clr-border);
+      z-index: 2;
+    }
+    #input-bar::before {
+      content: "> ";
+      color: var(--clr-neon);
+      font-size: 1.1rem;
+      margin-right: 4px;
+    }
+    #word-input {
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--clr-neon);
+      font-family: var(--font-mono);
+      font-size: clamp(1rem, 3vw, 1.25rem);
+      caret-color: var(--clr-neon);
+      flex: 1;
+      letter-spacing: 0.05em;
+    }
+
+    /* ---- Bug Sprites ---- */
+    .bug {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      cursor: default;
+      transition: opacity 0.1s;
+    }
+    .bug-emoji { font-size: clamp(1.4rem, 4vw, 2rem); line-height: 1; }
+    .bug-word {
+      font-size: clamp(0.6rem, 2vw, 0.8rem);
+      color: var(--clr-neon);
+      text-shadow: 0 0 4px var(--clr-neon);
+      white-space: nowrap;
+      background: rgba(0,0,0,0.5);
+      padding: 1px 4px;
+      border: 1px solid var(--clr-neon-dim);
+      border-radius: 2px;
+    }
+    .bug-word.typing { color: var(--clr-accent); border-color: var(--clr-accent); text-shadow: 0 0 4px var(--clr-accent); }
+
+    /* ---- Particles ---- */
+    .particle {
+      position: absolute;
+      pointer-events: none;
+      border-radius: 50%;
+      animation: burst 0.6s ease-out forwards;
+    }
+    @keyframes burst {
+      0%   { transform: translate(0,0) scale(1); opacity: 1; }
+      100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
+    }
+
+    /* ---- Combo Pop ---- */
+    .combo-pop {
+      position: absolute;
+      pointer-events: none;
+      color: var(--clr-accent);
+      font-size: 1.1rem;
+      font-weight: 700;
+      text-shadow: 0 0 8px var(--clr-accent);
+      animation: float-up 0.8s ease-out forwards;
+      white-space: nowrap;
+      z-index: 5;
+    }
+    @keyframes float-up {
+      0%   { opacity: 1; transform: translateY(0); }
+      100% { opacity: 0; transform: translateY(-48px); }
+    }
+
+    /* ---- Scan Lines Overlay ---- */
+    #arena-wrapper::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        to bottom,
+        transparent 0px,
+        transparent 3px,
+        rgba(0,0,0,0.08) 3px,
+        rgba(0,0,0,0.08) 4px
+      );
+      pointer-events: none;
+      z-index: 3;
+    }
+
+    /* ---- Screen Shake ---- */
+    @keyframes shake {
+      0%,100% { transform: translateX(0); }
+      20%      { transform: translateX(-8px); }
+      40%      { transform: translateX(8px); }
+      60%      { transform: translateX(-6px); }
+      80%      { transform: translateX(6px); }
+    }
+    .shake { animation: shake 0.35s ease; }
+
+    /* ---- Pause Screen ---- */
+    #screen-pause .pause-icon {
+      font-size: 3rem;
+      color: var(--clr-accent);
+      text-shadow: 0 0 16px var(--clr-accent);
+      margin-bottom: 1rem;
+    }
+
+    /* ---- Start Screen Decorations ---- */
+    .instructions {
+      max-width: 440px;
+      text-align: center;
+      font-size: clamp(0.7rem, 2vw, 0.85rem);
+      color: var(--clr-muted);
+      line-height: 1.8;
+      margin-bottom: 1.8rem;
+      padding: 0 1rem;
+    }
+    .instructions b { color: var(--clr-text); }
+
+    /* ---- Score Table on Game Over ---- */
+    .score-table {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem 2rem;
+      margin: 1.2rem 0 1.8rem;
+      font-size: clamp(0.8rem, 2vw, 1rem);
+    }
+    .score-table .label { color: var(--clr-muted); text-align: right; }
+    .score-table .val   { color: var(--clr-neon); text-shadow: 0 0 4px var(--clr-neon-dim); }
+    .score-table .val.hi { color: var(--clr-accent); text-shadow: 0 0 6px var(--clr-accent); }
+
+    /* ---- Level Badge ---- */
+    #level-badge {
+      color: var(--clr-accent);
+      font-size: 0.75rem;
+      text-shadow: 0 0 4px var(--clr-accent);
+    }
+
+    /* ---- Responsive Wrapper ---- */
+    #game-root {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      max-width: 900px;
+      height: 100dvh;
+      position: relative;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ============================================================
+     HTML STRUCTURE
+     ============================================================ -->
+
+<!-- Game root container -->
+<div id="game-root">
+
+  <!-- HUD (Heads-Up Display) — visible during gameplay -->
+  <div id="hud" role="status" aria-live="polite" aria-atomic="true">
+    <div class="score-row">
+      <div>SKOR: <span id="hud-score">0</span></div>
+      <div>REKOR: <span id="hud-hiscore">0</span></div>
+      <div id="level-badge">LVL 1</div>
+    </div>
+    <div class="score-row">
+      <div>KOMBO: <span id="hud-combo">x1</span></div>
+      <div id="lives-display">❤️❤️❤️</div>
+    </div>
+  </div>
+
+  <!-- Arena: where bugs fall -->
+  <div id="arena-wrapper" role="main" aria-label="Arena permainan">
+    <div id="server-line" role="presentation"></div>
+    <div id="server-label">⚠ SERVER PRODUKSI</div>
+    <!-- Bugs and particles are injected here by JS -->
+
+    <!-- Typing input (always rendered, only active during play) -->
+    <div id="input-bar">
+      <input
+        id="word-input"
+        type="text"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="none"
+        spellcheck="false"
+        aria-label="Ketik kata untuk membasmi bug"
+        placeholder="ketik di sini..."
+        disabled
+      />
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     SCREEN: Start
+     ============================================================ -->
+<div id="screen-start" class="screen active" role="dialog" aria-modal="true" aria-label="Layar Mulai">
+  <h1 class="neon-title">🐛 BUG HUNTER</h1>
+  <p class="neon-sub">IBM AI Builders Challenge — Tantangan IT</p>
+  <p class="instructions">
+    Bug-bug berbahaya jatuh menuju <b>Server Produksi</b>!<br>
+    <b>Ketik kata</b> pada bug untuk membasminya sebelum menyentuh garis.<br><br>
+    ❤️ Kamu punya <b>3 nyawa</b> — setiap bug lolos, 1 nyawa hilang.<br>
+    🔥 Combo beruntun melipatgandakan skor!<br>
+    ⚡ Kesulitan meningkat setiap <b>30 detik</b>.<br><br>
+    Tekan <b>ESC</b> untuk jeda kapan saja.
+  </p>
+  <button class="btn" id="btn-start">▶ MULAI PERMAINAN</button>
+</div>
+
+<!-- ============================================================
+     SCREEN: Pause
+     ============================================================ -->
+<div id="screen-pause" class="screen" role="dialog" aria-modal="true" aria-label="Jeda">
+  <div class="pause-icon">⏸</div>
+  <h2 class="neon-title" style="font-size:clamp(1.5rem,4vw,2.5rem)">DIJEDA</h2>
+  <p class="neon-sub">Tekan ESC atau klik tombol untuk melanjutkan</p>
+  <button class="btn" id="btn-resume">▶ LANJUTKAN</button>
+  <button class="btn btn-warn" id="btn-quit">✕ KELUAR</button>
+</div>
+
+<!-- ============================================================
+     SCREEN: Game Over
+     ============================================================ -->
+<div id="screen-gameover" class="screen" role="dialog" aria-modal="true" aria-label="Permainan Selesai">
+  <h2 class="neon-title" style="color:var(--clr-warn);text-shadow:0 0 12px var(--clr-warn)">GAME OVER</h2>
+  <p class="neon-sub">Server Produksi telah terinfeksi!</p>
+  <div class="score-table">
+    <div class="label">Skor Akhir</div>
+    <div class="val" id="go-score">0</div>
+    <div class="label">Rekor Tertinggi</div>
+    <div class="val hi" id="go-hiscore">0</div>
+    <div class="label">Level Dicapai</div>
+    <div class="val" id="go-level">1</div>
+    <div class="label">Bug Dibasmi</div>
+    <div class="val" id="go-killed">0</div>
+  </div>
+  <button class="btn" id="btn-restart">↺ MAIN LAGI</button>
+  <button class="btn" id="btn-menu">⌂ MENU UTAMA</button>
+</div>
+
+<!-- ============================================================
+     JAVASCRIPT — Game Engine
+     ============================================================ -->
+<script>
+/* ============================================================
+   SECTION 1: Constants & Configuration
+   ============================================================ */
+const BUG_WORDS = [
+  'NullPointer','SyntaxError','Segfault','Timeout',
+  '404','StackOverflow','Deadlock','MemLeak',
+  'Overflow','TypeError','RaceCondition','Infinite',
+  'CrashDump','BluScreen','KernelPanic','Exception',
+  'DivideByZero','BadAlloc','OutOfMemory','Undefined'
+];
+
+/** Difficulty tiers — applied every 30 s. */
+const DIFFICULTY = [
+  { level:1, spawnMs:2800, speedMin:40,  speedMax:80  },
+  { level:2, spawnMs:2400, speedMin:55,  speedMax:100 },
+  { level:3, spawnMs:2000, speedMin:70,  speedMax:120 },
+  { level:4, spawnMs:1700, speedMin:90,  speedMax:150 },
+  { level:5, spawnMs:1400, speedMin:110, speedMax:180 },
+  { level:6, spawnMs:1200, speedMin:130, speedMax:210 },
+];
+
+const BASE_SCORE   = 100;   /* points per kill */
+const LEVEL_UP_SEC = 30;    /* seconds between level ups */
+const MAX_LIVES    = 3;
+const PARTICLE_CNT = 18;
+
+/* ============================================================
+   SECTION 2: Web Audio API — Sound Effects
+   ============================================================ */
+let audioCtx = null;
+
+/** Lazily creates AudioContext on first user gesture. */
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+/**
+ * Plays a quick synthesized sound.
+ * @param {'kill'|'miss'|'gameover'|'levelup'|'combo'} type
+ */
+function playSound(type) {
+  try {
+    const ctx  = getAudioCtx();
+    const gain = ctx.createGain();
+    gain.connect(ctx.destination);
+
+    const osc = ctx.createOscillator();
+    osc.connect(gain);
+
+    const now = ctx.currentTime;
+
+    switch (type) {
+      case 'kill': {
+        // Short upward blip
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(400, now);
+        osc.frequency.exponentialRampToValueAtTime(800, now + 0.08);
+        gain.gain.setValueAtTime(0.18, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+        osc.start(now); osc.stop(now + 0.15);
+        break;
+      }
+      case 'miss': {
+        // Low descending buzz
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(300, now);
+        osc.frequency.exponentialRampToValueAtTime(80, now + 0.3);
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+        osc.start(now); osc.stop(now + 0.35);
+        break;
+      }
+      case 'gameover': {
+        // Dramatic descending chord
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(220, now);
+        osc.frequency.exponentialRampToValueAtTime(55, now + 0.9);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
+        osc.start(now); osc.stop(now + 0.9);
+        break;
+      }
+      case 'levelup': {
+        // Ascending arpeggio
+        const freqs = [523, 659, 784, 1047];
+        freqs.forEach((f, i) => {
+          const o2 = ctx.createOscillator();
+          const g2 = ctx.createGain();
+          o2.connect(g2); g2.connect(ctx.destination);
+          o2.type = 'triangle';
+          o2.frequency.setValueAtTime(f, now + i * 0.1);
+          g2.gain.setValueAtTime(0.15, now + i * 0.1);
+          g2.gain.exponentialRampToValueAtTime(0.001, now + i * 0.1 + 0.15);
+          o2.start(now + i * 0.1); o2.stop(now + i * 0.1 + 0.2);
+        });
+        osc.disconnect(); // osc unused
+        return;
+      }
+      case 'combo': {
+        // High ping
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1200, now);
+        osc.frequency.exponentialRampToValueAtTime(1600, now + 0.1);
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+        osc.start(now); osc.stop(now + 0.18);
+        break;
+      }
+      default:
+        osc.disconnect(); return;
+    }
+  } catch (_) { /* audio failures are non-fatal */ }
+}
+
+/* ============================================================
+   SECTION 3: DOM References
+   ============================================================ */
+const arenaEl      = document.getElementById('arena-wrapper');
+const wordInput    = document.getElementById('word-input');
+const hudScore     = document.getElementById('hud-score');
+const hudHiscore   = document.getElementById('hud-hiscore');
+const hudCombo     = document.getElementById('hud-combo');
+const hudLives     = document.getElementById('lives-display');
+const levelBadge   = document.getElementById('level-badge');
+
+const screenStart    = document.getElementById('screen-start');
+const screenPause    = document.getElementById('screen-pause');
+const screenGameover = document.getElementById('screen-gameover');
+
+const btnStart   = document.getElementById('btn-start');
+const btnResume  = document.getElementById('btn-resume');
+const btnQuit    = document.getElementById('btn-quit');
+const btnRestart = document.getElementById('btn-restart');
+const btnMenu    = document.getElementById('btn-menu');
+
+const goScore   = document.getElementById('go-score');
+const goHiscore = document.getElementById('go-hiscore');
+const goLevel   = document.getElementById('go-level');
+const goKilled  = document.getElementById('go-killed');
+
+/* ============================================================
+   SECTION 4: Game State
+   ============================================================ */
+let state = {
+  running:   false,
+  paused:    false,
+  score:     0,
+  hiScore:   parseInt(localStorage.getItem('bh_hiscore') || '0', 10),
+  lives:     MAX_LIVES,
+  combo:     1,
+  level:     1,
+  killed:    0,
+  bugs:      [],      /* array of bug objects */
+  lastTime:  0,
+  elapsed:   0,       /* total ms since start (excludes pauses) */
+  spawnTimer:0,
+  currentDiff: DIFFICULTY[0],
+};
+
+/* ============================================================
+   SECTION 5: Bug Management
+   ============================================================ */
+let bugIdCounter = 0;
+
+/** Returns arena dimensions excluding the input-bar height. */
+function arenaSize() {
+  const r = arenaEl.getBoundingClientRect();
+  return { w: r.width, h: r.height };
+}
+
+/** Server line bottom offset from arena top (px) = arenaH - inputBar - line. */
+function serverLineY() {
+  const { h } = arenaSize();
+  return h - 52 - 2; /* 52 input bar, 2 line thickness */
+}
+
+/** Picks a random word not already on screen. */
+function randomWord() {
+  const used = new Set(state.bugs.map(b => b.word));
+  const pool = BUG_WORDS.filter(w => !used.has(w));
+  if (pool.length === 0) return BUG_WORDS[Math.floor(Math.random() * BUG_WORDS.length)];
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+/** Spawns a new bug into the arena. */
+function spawnBug() {
+  const { w } = arenaSize();
+  const word  = randomWord();
+  const diff  = state.currentDiff;
+  const speed = diff.speedMin + Math.random() * (diff.speedMax - diff.speedMin); /* px/s */
+  const id    = ++bugIdCounter;
+
+  /* Create DOM element */
+  const el = document.createElement('div');
+  el.className = 'bug';
+  el.id = `bug-${id}`;
+  el.setAttribute('aria-hidden', 'true');
+
+  const emojiEl = document.createElement('div');
+  emojiEl.className = 'bug-emoji';
+  emojiEl.textContent = '🐛';
+
+  const wordEl = document.createElement('div');
+  wordEl.className = 'bug-word';
+  wordEl.textContent = word;
+
+  el.appendChild(emojiEl);
+  el.appendChild(wordEl);
+
+  /* Horizontal position: keep within arena width with padding */
+  const pad  = 60;
+  const xPos = pad + Math.random() * Math.max(0, w - pad * 2 - 80);
+
+  el.style.left = `${xPos}px`;
+  el.style.top  = '-60px';
+
+  arenaEl.insertBefore(el, arenaEl.querySelector('#server-line'));
+
+  const bug = { id, word, speed, x: xPos, y: -60, el, wordEl };
+  state.bugs.push(bug);
+  return bug;
+}
+
+/** Removes a bug from DOM and state array. */
+function removeBug(id) {
+  const idx = state.bugs.findIndex(b => b.id === id);
+  if (idx === -1) return;
+  const bug = state.bugs[idx];
+  bug.el.remove();
+  state.bugs.splice(idx, 1);
+}
+
+/* ============================================================
+   SECTION 6: Particle Explosion
+   ============================================================ */
+/** Spawns a burst of particles at (x, y) in the arena. */
+function spawnParticles(x, y) {
+  const colors = ['#39ff14','#00e5ff','#ffffff','#ffff00'];
+  for (let i = 0; i < PARTICLE_CNT; i++) {
+    const p     = document.createElement('div');
+    p.className = 'particle';
+    const size  = 4 + Math.random() * 6;
+    const angle = (Math.PI * 2 / PARTICLE_CNT) * i + Math.random() * 0.4;
+    const dist  = 30 + Math.random() * 60;
+    const tx    = Math.cos(angle) * dist;
+    const ty    = Math.sin(angle) * dist;
+    p.style.cssText = `
+      left:${x}px; top:${y}px;
+      width:${size}px; height:${size}px;
+      background:${colors[Math.floor(Math.random() * colors.length)]};
+      --tx:${tx}px; --ty:${ty}px;
+    `;
+    arenaEl.appendChild(p);
+    p.addEventListener('animationend', () => p.remove(), { once: true });
+  }
+}
+
+/** Floats a combo label above a kill position. */
+function spawnComboPop(x, y, combo) {
+  if (combo < 2) return;
+  const pop = document.createElement('div');
+  pop.className = 'combo-pop';
+  pop.textContent = `x${combo} COMBO!`;
+  pop.style.left = `${x - 40}px`;
+  pop.style.top  = `${y - 20}px`;
+  arenaEl.appendChild(pop);
+  pop.addEventListener('animationend', () => pop.remove(), { once: true });
+}
+
+/* ============================================================
+   SECTION 7: Screen Shake
+   ============================================================ */
+function triggerShake() {
+  arenaEl.classList.remove('shake');
+  /* Reflow to restart animation */
+  void arenaEl.offsetWidth;
+  arenaEl.classList.add('shake');
+  arenaEl.addEventListener('animationend', () => arenaEl.classList.remove('shake'), { once: true });
+}
+
+/* ============================================================
+   SECTION 8: HUD Updates
+   ============================================================ */
+function updateHud() {
+  hudScore.textContent   = state.score.toLocaleString('id-ID');
+  hudHiscore.textContent = state.hiScore.toLocaleString('id-ID');
+  hudCombo.textContent   = `x${state.combo}`;
+  levelBadge.textContent = `LVL ${state.level}`;
+
+  /* Lives hearts */
+  const hearts = '❤️'.repeat(state.lives) + '🖤'.repeat(MAX_LIVES - state.lives);
+  hudLives.textContent = hearts;
+}
+
+/** Highlights the bug whose word starts with what's typed. */
+function highlightMatchingBug(typed) {
+  state.bugs.forEach(b => {
+    if (typed.length > 0 && b.word.toLowerCase().startsWith(typed.toLowerCase())) {
+      b.wordEl.classList.add('typing');
+    } else {
+      b.wordEl.classList.remove('typing');
+    }
+  });
+}
+
+/* ============================================================
+   SECTION 9: Input Handling
+   ============================================================ */
+wordInput.addEventListener('input', () => {
+  if (!state.running || state.paused) return;
+
+  const typed = wordInput.value.trim();
+  highlightMatchingBug(typed);
+
+  /* Check for exact match (case-insensitive) */
+  const hit = state.bugs.find(b => b.word.toLowerCase() === typed.toLowerCase());
+  if (!hit) return;
+
+  /* ---- Kill the bug ---- */
+  const bx = hit.x + 20;
+  const by = hit.y + 20;
+
+  spawnParticles(bx, by);
+  spawnComboPop(bx, by, state.combo);
+  removeBug(hit.id);
+
+  /* Score with combo multiplier */
+  state.score  += BASE_SCORE * state.combo;
+  state.combo  += 1;
+  state.killed += 1;
+
+  if (state.score > state.hiScore) {
+    state.hiScore = state.score;
+    localStorage.setItem('bh_hiscore', state.hiScore);
+  }
+
+  playSound(state.combo > 3 ? 'combo' : 'kill');
+  wordInput.value = '';
+  highlightMatchingBug('');
+  updateHud();
+});
+
+/* ============================================================
+   SECTION 10: Main Game Loop (requestAnimationFrame)
+   ============================================================ */
+let rafId = null;
+
+function gameLoop(timestamp) {
+  if (!state.running || state.paused) return;
+
+  const dt = state.lastTime ? (timestamp - state.lastTime) / 1000 : 0; /* seconds */
+  state.lastTime  = timestamp;
+  state.elapsed  += dt * 1000; /* ms */
+
+  /* ---- Level progression ---- */
+  const newLevel = Math.min(
+    DIFFICULTY.length,
+    1 + Math.floor(state.elapsed / (LEVEL_UP_SEC * 1000))
+  );
+  if (newLevel !== state.level) {
+    state.level       = newLevel;
+    state.currentDiff = DIFFICULTY[newLevel - 1];
+    playSound('levelup');
+  }
+
+  /* ---- Spawn timer ---- */
+  state.spawnTimer += dt * 1000;
+  if (state.spawnTimer >= state.currentDiff.spawnMs) {
+    state.spawnTimer = 0;
+    spawnBug();
+  }
+
+  /* ---- Move bugs ---- */
+  const limit = serverLineY();
+  const toRemove = [];
+
+  state.bugs.forEach(bug => {
+    bug.y += bug.speed * dt;
+    bug.el.style.top = `${bug.y}px`;
+
+    if (bug.y >= limit) {
+      toRemove.push(bug.id);
+    }
+  });
+
+  /* ---- Process bugs that hit server line ---- */
+  toRemove.forEach(id => {
+    removeBug(id);
+    state.lives  -= 1;
+    state.combo   = 1; /* reset combo on miss */
+    playSound('miss');
+    triggerShake();
+    updateHud();
+
+    if (state.lives <= 0) {
+      endGame();
+      return;
+    }
+  });
+
+  if (state.running) {
+    rafId = requestAnimationFrame(gameLoop);
+  }
+}
+
+/* ============================================================
+   SECTION 11: Game Lifecycle (Start / Pause / End)
+   ============================================================ */
+function showScreen(el) {
+  [screenStart, screenPause, screenGameover].forEach(s => s.classList.remove('active'));
+  if (el) el.classList.add('active');
+}
+
+function startGame() {
+  /* Reset state */
+  state = {
+    running:    true,
+    paused:     false,
+    score:      0,
+    hiScore:    parseInt(localStorage.getItem('bh_hiscore') || '0', 10),
+    lives:      MAX_LIVES,
+    combo:      1,
+    level:      1,
+    killed:     0,
+    bugs:       [],
+    lastTime:   0,
+    elapsed:    0,
+    spawnTimer: 0,
+    currentDiff: DIFFICULTY[0],
+  };
+
+  /* Clear leftover bug DOM nodes */
+  arenaEl.querySelectorAll('.bug,.particle,.combo-pop').forEach(n => n.remove());
+
+  updateHud();
+  showScreen(null); /* hide all overlays */
+  wordInput.disabled = false;
+  wordInput.value    = '';
+  wordInput.focus();
+
+  rafId = requestAnimationFrame(gameLoop);
+}
+
+function pauseGame() {
+  if (!state.running || state.paused) return;
+  state.paused   = true;
+  state.lastTime = 0; /* so dt=0 on resume */
+  wordInput.disabled = true;
+  showScreen(screenPause);
+}
+
+function resumeGame() {
+  if (!state.paused) return;
+  state.paused  = false;
+  wordInput.disabled = false;
+  wordInput.focus();
+  showScreen(null);
+  rafId = requestAnimationFrame(gameLoop);
+}
+
+function endGame() {
+  state.running = false;
+  state.paused  = false;
+
+  if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+
+  /* Persist hi-score */
+  if (state.score > state.hiScore) {
+    state.hiScore = state.score;
+    localStorage.setItem('bh_hiscore', state.hiScore);
+  }
+
+  playSound('gameover');
+  wordInput.disabled = true;
+
+  /* Populate game-over screen */
+  goScore.textContent   = state.score.toLocaleString('id-ID');
+  goHiscore.textContent = state.hiScore.toLocaleString('id-ID');
+  goLevel.textContent   = state.level;
+  goKilled.textContent  = state.killed;
+
+  showScreen(screenGameover);
+}
+
+function goToMenu() {
+  if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+  state.running = false;
+  arenaEl.querySelectorAll('.bug,.particle,.combo-pop').forEach(n => n.remove());
+  wordInput.disabled = true;
+  showScreen(screenStart);
+}
+
+/* ============================================================
+   SECTION 12: Keyboard & Button Events
+   ============================================================ */
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if (state.running && !state.paused) pauseGame();
+    else if (state.paused)             resumeGame();
+  }
+});
+
+btnStart.addEventListener('click',   startGame);
+btnResume.addEventListener('click',  resumeGame);
+btnQuit.addEventListener('click',    goToMenu);
+btnRestart.addEventListener('click', startGame);
+btnMenu.addEventListener('click',    goToMenu);
+
+/* Focus the input when clicking anywhere in the arena during play */
+arenaEl.addEventListener('click', () => {
+  if (state.running && !state.paused) wordInput.focus();
+});
+
+/* ============================================================
+   SECTION 13: Initial HUD Render
+   ============================================================ */
+(function init() {
+  hudHiscore.textContent = parseInt(localStorage.getItem('bh_hiscore') || '0', 10)
+    .toLocaleString('id-ID');
+})();
+
+/* ============================================================
+   END OF SCRIPT
+   ============================================================ */
+</script>
+</body>
+</html>
