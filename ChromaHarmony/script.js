@@ -710,8 +710,8 @@ function updateRecommendations() {
   // Five harmonic candidates — hue preserved, saturation from bg (clamped)
   const harmonyDefs = [
     { rule: 'Complementary',       angle: hue(h + 180) },
-    { rule: 'Split-Compl. Left',   angle: hue(h + 150) },
-    { rule: 'Split-Compl. Right',  angle: hue(h + 210) },
+    { rule: 'Split-Complementary Left',   angle: hue(h + 150) },
+    { rule: 'Split-Complementary Right',  angle: hue(h + 210) },
     { rule: 'Analogous (+30°)',    angle: hue(h +  30) },
     { rule: 'Monochromatic',       angle: hue(h)       },
   ];
